@@ -3,12 +3,20 @@ session_start();
 $_SESSION['tasks'] = $_SESSION['tasks'] ?? [];
 $errors = [];
 
+// ===== DEMO ONLY: sample tasks to preview the layout. DELETE this block before final submission. =====
+if (empty($_SESSION['demo_loaded'])) {
+    $_SESSION['tasks'] = [
+        ['id' => uniqid(), 'name' => 'Finish Chapter 1', 'description' => 'Identify the Scope and Delimitations'],
+        ['id' => uniqid(), 'name' => 'Buy groceries',    'description' => 'Milk, eggs, bread, and butter'],
+        ['id' => uniqid(), 'name' => 'Read a Book',      'description' => 'Finish 2 chapters of Atomic Habits'],
+    ];
+    $_SESSION['demo_loaded'] = true;
+}
+// ===== END DEMO =====
+
 // Each task in $_SESSION['tasks'] is expected to look like:
 // ['id' => uniqid(), 'name' => '...', 'description' => '...']
 
-// TODO (Prixy): handle POST action "add" -> save to $_SESSION['tasks'] with uniqid()
-// TODO (Paul): request guarding + validation (trim, empty, strlen) -> fill $errors[]
-// TODO: handle POST actions "update" and "delete" (match the task by task_id)
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -87,15 +95,15 @@ $errors = [];
               <!-- Read view -->
               <div class="task-view">
                 <div class="task-info">
-                  <h3 class="task-name"><?= $name ?></h3>
-                  <p class="task-description"><?= $description ?></p>
+                  <h3 class="task-title"><?= $name ?></h3>
+                  <p class="task-desc"><?= $description ?></p>
                 </div>
-                <div class="task-actions">
-                  <button type="button" class="btn-edit">Edit</button>
+                <div class="task-meta">
+                  <button type="button" class="icon-btn edit">Edit</button>
                   <form method="POST" class="delete-form">
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="task_id" value="<?= $id ?>">
-                    <button type="submit" class="btn-delete">Delete</button>
+                    <button type="submit" class="icon-btn delete">Delete</button>
                   </form>
                 </div>
               </div>
