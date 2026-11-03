@@ -1,7 +1,7 @@
 /* =========================================================
-   TaskFlow — script.js  (UI interactions only)
+   TaskFlow — script.js  
 
-   EVENTS USED (via addEventListener):
+   EVENTS USED:
      1. input    -> live search filtering
      2. click    -> open/close Add Task form, toggle Edit forms,
                     star a task, delete a task, filter by status
@@ -9,7 +9,7 @@
      4. keydown  -> Escape closes open forms
    ========================================================= */
 
-/* Short helpers for selecting elements */
+/* short helpers for selecting elements */
 const $ = (selector, parent = document) => parent.querySelector(selector);
 const $$ = (selector, parent = document) => [...parent.querySelectorAll(selector)];
 
@@ -108,20 +108,45 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   taskList.addEventListener("change", toggleDone);
 
-  /* ---------- 5. Delete Confirmation ---------- */
+    /* ---------- 5. Delete Confirmation (modal) ---------- */
+  const deleteModal = $("#delete-modal");
+  let taskToDelete = null;
 
-  /* FUNCTION 8 — confirmDelete()                   [click] */
-  function confirmDelete(event) {
+    /* FUNCTION 8 — openDeleteModal()                 [click] */
+    function openDeleteModal(event) {
     const deleteBtn = event.target.closest(".btn-icon.delete");
-    if (deleteBtn && confirm("Move this task to Trash?")) {
-      deleteBtn.closest(".task-item").remove();
+    if (!deleteBtn) {
+      return;
+    }
+    taskToDelete = deleteBtn.closest(".task-item");
+    $("#delete-modal-name").textContent = $("h3", taskToDelete).textContent;
+    deleteModal.showModal();
+  }
+  taskList.addEventListener("click", openDeleteModal);
+
+  /* FUNCTION 9 — confirmDelete()                   [click] */
+  function confirmDelete() {
+    if (taskToDelete) {
+      taskToDelete.remove();
+      taskToDelete = null;
+    }
+    deleteModal.close();
+  }
+  $("#delete-confirm-btn").addEventListener("click", confirmDelete);
+
+  /* FUNCTION 10 — closeDeleteModal()               [click] */
+  function closeDeleteModal(event) {
+    if (event.target.id === "delete-cancel-btn" || event.target === deleteModal) {
+      taskToDelete = null;
+      deleteModal.close();
     }
   }
-  taskList.addEventListener("click", confirmDelete);
+  $("#delete-cancel-btn").addEventListener("click", closeDeleteModal);
+  deleteModal.addEventListener("click", closeDeleteModal);
 
   /* ---------- 6. Status Filter Tabs ---------- */
 
-  /* FUNCTION 9 — filterByStatus()                  [click] */
+  /* FUNCTION 11 — filterByStatus()                  [click] */
   function filterByStatus(event) {
     event.preventDefault();
     const status = this.dataset.status;
@@ -139,7 +164,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   /* ---------- 7. Keyboard Shortcut ---------- */
 
-  /* FUNCTION 10 — closeFormsOnEscape()             [keydown] */
+  /* FUNCTION 12 — closeFormsOnEscape()             [keydown] */
   function closeFormsOnEscape(event) {
     if (event.key !== "Escape") {
       return;

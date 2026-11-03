@@ -138,6 +138,15 @@ $statusFilter = $_GET['status'] ?? 'all';
   <section class="tasks" aria-label="Task list">
     <p class="empty-state" id="no-results" hidden>No tasks match your search.</p>
     <ul class="task-list" id="task-list">
+    
+    <!-- ----------------------  note for backend  !! ---------------------------------------------------------------->
+    <!-- 
+           These 3 tasks are just samples.
+           Delete them and loop the real tasks instead, one <li class="task-item"> each.
+           Just keep the same classes para d masira design
+           Things to fill in per task: status, name, description, due date,
+           star (is-active), and the values inside the edit form. -->
+
       <li class="task-item" data-status="inprogress">
         <div class="task-row">
           <input type="checkbox" class="task-checkbox" aria-label="Mark &quot;Finish Chapter 1&quot; as done">
@@ -240,6 +249,7 @@ $statusFilter = $_GET['status'] ?? 'all';
           </div>
         </form>
       </li>
+      <!-- ----------------------  end of sample tasks  !! ---------------------------------------------------------------->
     </ul>
   </section>
 </main>
@@ -262,6 +272,16 @@ $statusFilter = $_GET['status'] ?? 'all';
     <li><span class="dot dot-overdue"></span><span>Overdue</span><strong>1</strong></li>
   </ul>
 </aside>
+
+<!-- Delete modal (script.js) -->
+<dialog class="modal" id="delete-modal" aria-labelledby="delete-modal-title">
+  <h2 id="delete-modal-title">Move to Trash?</h2>
+  <p>"<span id="delete-modal-name">this task</span>" will be moved to Trash. You can restore it later.</p>
+  <div class="form-actions">
+    <button type="button" class="btn-primary btn-secondary" id="delete-cancel-btn">Cancel</button>
+    <button type="button" class="btn-primary btn-danger" id="delete-confirm-btn">Move to Trash</button>
+  </div>
+</dialog>
 
 <script src="script.js"></script>
 </body>

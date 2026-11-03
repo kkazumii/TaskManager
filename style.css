@@ -2,7 +2,7 @@
    TaskFlow — style.css
    1. Variables   2. Base & Layout   3. Left Sidebar   4. Main Content
    5. Header      6. Buttons         7. Filter Tabs    8. Forms
-   9. Task List   10. Right Sidebar  
+   9. Task List   10. Right Sidebar  11. Delete Modal
    ========================================================================== */
 
 
@@ -800,3 +800,34 @@ select {
 .dot-progress  { background: var(--status-progress-text); }
 .dot-completed { background: var(--status-completed-text); }
 .dot-overdue   { background: var(--danger); }
+
+/* --------- 11. DELETE MODAL ----------- */
+.modal {
+  margin: auto;
+  width: min(420px, calc(100% - 32px));
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--card-bg);
+  color: var(--text-main);
+  box-shadow: var(--shadow-md);
+}
+
+.modal::backdrop {
+  background: rgba(44, 40, 37, 0.55);
+}
+
+.modal h2 {
+  font-size: 1.15rem;
+  margin-bottom: 8px;
+}
+
+.modal p {
+  color: var(--text-muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.modal .form-actions {
+  margin-top: 20px;
+}
