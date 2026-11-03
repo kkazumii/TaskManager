@@ -1,4 +1,5 @@
 <?php
+$pageTitle = "Task Manager";
 session_start();
 $_SESSION['tasks'] = $_SESSION['tasks'] ?? [];
 $errors = [];
@@ -26,6 +27,7 @@ $statusFilter = $_GET['status'] ?? 'all';
 // $pageTitle is defined separately (e.g. "My Tasks", "Completed", "Important", "Trash").
 
 ?>
+<!--------- HTML STRUCTURE --------------->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,206 +37,232 @@ $statusFilter = $_GET['status'] ?? 'all';
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
 
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <header class="logo">
-        <img src="assets/taskflow_logo.png" alt="TaskFlow logo" class="logo-img">
-      </header>
-
-      <nav class="nav" aria-label="Task categories">
-        <ul>
-          <li class="nav-item<?= $view === 'mytasks' ? ' active' : '' ?>"><a href="?view=mytasks"<?= $view === 'mytasks' ? ' aria-current="page"' : '' ?>><img src="assets/tasks.png" alt="" class="nav-icon"><span>My Tasks</span></a></li>
-          <li class="nav-item<?= $view === 'completed' ? ' active' : '' ?>"><a href="?view=completed"<?= $view === 'completed' ? ' aria-current="page"' : '' ?>><img src="assets/completed.png" alt="" class="nav-icon"><span>Completed</span></a></li>
-          <li class="nav-item<?= $view === 'important' ? ' active' : '' ?>"><a href="?view=important"<?= $view === 'important' ? ' aria-current="page"' : '' ?>><img src="assets/Brown Star Outline.png" alt="" class="nav-icon"><span>Important</span></a></li>
-          <li class="nav-item<?= $view === 'trash' ? ' active' : '' ?>"><a href="?view=trash"<?= $view === 'trash' ? ' aria-current="page"' : '' ?>><img src="assets/trash.png" alt="" class="nav-icon"><span>Trash</span></a></li>
-        </ul>
-      </nav>
-
-      <footer class="user">
-        <img src="assets/taskflow_user_icon.png" alt="User avatar" class="user-avatar">
-        <span class="user-name">Claude</span>
-        <img src="assets/taskflow_dropdown_icon.png" alt="" class="user-arrow">
-      </footer>
-    </aside>
-
-    <!-- Main content -->
-    <main class="main">
-      <header class="page-header">
-        <h1 class="page-title"><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></h1>
-
-        <?php if ($view === 'trash'): ?>
-          <form method="POST" class="empty-trash-form">
-            <input type="hidden" name="action" value="empty_trash">
-            <button type="submit" class="btn-danger">Empty Trash</button>
-          </form>
-        <?php else: ?>
-          <button type="button" class="add-task-btn" id="add-task-btn" aria-controls="add-task-section" aria-expanded="<?= empty($errors) ? 'false' : 'true' ?>">+ Add Task</button>
-        <?php endif; ?>
-      </header>
-
-      <?php if ($view === 'mytasks'): ?>
-        <!-- Status tabs -->
-        <nav class="tabs" aria-label="Filter tasks by status">
-          <ul>
-            <li><a href="?view=mytasks" class="tab<?= $statusFilter === 'all' ? ' active' : '' ?>"<?= $statusFilter === 'all' ? ' aria-current="page"' : '' ?>>All</a></li>
-            <li><a href="?view=mytasks&amp;status=todo" class="tab<?= $statusFilter === 'todo' ? ' active' : '' ?>"<?= $statusFilter === 'todo' ? ' aria-current="page"' : '' ?>>To Do</a></li>
-            <li><a href="?view=mytasks&amp;status=inprogress" class="tab<?= $statusFilter === 'inprogress' ? ' active' : '' ?>"<?= $statusFilter === 'inprogress' ? ' aria-current="page"' : '' ?>>In Progress</a></li>
-          </ul>
-        </nav>
-      <?php endif; ?>
-
-      <?php if ($view !== 'trash'): ?>
-        <!-- Add task form (opened by the + Add Task button) -->
-        <section class="add-task-section" id="add-task-section" aria-labelledby="add-task-title" <?= empty($errors) ? 'hidden' : '' ?>>
-          <h2 class="section-title" id="add-task-title">Add a Task</h2>
-
-          <?php foreach ($errors as $error): ?>
-            <p class="form-error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
-          <?php endforeach; ?>
-
-          <form method="POST" class="task-form">
-            <input type="hidden" name="action" value="add">
-
-            <label for="task_name">Task Name</label>
-            <input type="text" id="task_name" name="task_name" required>
-
-            <label for="task_description">Task Description</label>
-            <input type="text" id="task_description" name="task_description" required>
-
-            <label for="task_due">Due Date</label>
-            <input type="date" id="task_due" name="task_due">
-
-            <label for="task_status">Status</label>
-            <select id="task_status" name="task_status">
-              <option value="todo" selected>To Do</option>
-              <option value="inprogress">In Progress</option>
-              <option value="completed">Completed</option>
-            </select>
-
-            <button type="submit" name="submit" class="save-btn">Add Task</button>
-          </form>
-        </section>
-      <?php endif; ?>
-
-      <!-- Task list -->
-      <section class="tasks" aria-labelledby="task-list-title">
-        <h2 class="section-title" id="task-list-title"><?= $view === 'trash' ? 'Deleted Tasks' : 'Your Tasks' ?></h2>
-
-        <?php if (empty($_SESSION['tasks'])): ?>
-          <?php if ($view === 'trash'): ?>
-            <p class="empty-state">Trash is empty.</p>
-          <?php else: ?>
-            <p class="empty-state">No tasks yet. Click "+ Add Task" to create one.</p>
-          <?php endif; ?>
-        <?php endif; ?>
-
-        <ul class="task-list" id="task-list">
-          <?php foreach ($_SESSION['tasks'] as $task):
-            $id          = htmlspecialchars($task['id'], ENT_QUOTES, 'UTF-8');
-            $name        = htmlspecialchars($task['name'], ENT_QUOTES, 'UTF-8');
-            $description = htmlspecialchars($task['description'], ENT_QUOTES, 'UTF-8');
-            $dueRaw      = $task['due'] ?? '';
-            $due         = htmlspecialchars($dueRaw, ENT_QUOTES, 'UTF-8');
-            $dueLabel    = $dueRaw !== '' ? date('M d, Y', strtotime($dueRaw)) : '';
-            $taskStatus  = $task['status'] ?? 'todo';
-            $isDone      = !empty($task['done']);
-            $isImportant = !empty($task['important']);
-          ?>
-            <li class="task-card<?= $isDone ? ' completed' : '' ?>">
-
-              <!-- Read view -->
-              <div class="task-view">
-
-                <?php if ($view !== 'trash'): ?>
-                  <!-- Complete toggle -->
-                  <form method="POST" class="toggle-form">
-                    <input type="hidden" name="action" value="toggle_done">
-                    <input type="hidden" name="task_id" value="<?= $id ?>">
-                    <label for="done_<?= $id ?>" class="sr-only">Mark "<?= $name ?>" as done</label>
-                    <input type="checkbox" id="done_<?= $id ?>" class="task-check" <?= $isDone ? 'checked' : '' ?> onchange="this.form.submit()">
-                    <noscript><button type="submit">Update</button></noscript>
-                  </form>
-                <?php endif; ?>
-
-                <div class="task-info">
-                  <h3 class="task-title"><?= $name ?></h3>
-                  <p class="task-desc"><?= $description ?></p>
-                </div>
-
-                <div class="task-meta">
-                  <?php if ($dueLabel !== ''): ?>
-                    <span class="task-date"><time datetime="<?= $due ?>"><?= $dueLabel ?></time></span>
-                  <?php endif; ?>
-
-                  <?php if ($view === 'trash'): ?>
-                    <!-- Trash actions -->
-                    <form method="POST" class="restore-form">
-                      <input type="hidden" name="action" value="restore">
-                      <input type="hidden" name="task_id" value="<?= $id ?>">
-                      <button type="submit" class="icon-btn restore">Restore</button>
-                    </form>
-                    <form method="POST" class="delete-forever-form">
-                      <input type="hidden" name="action" value="delete_forever">
-                      <input type="hidden" name="task_id" value="<?= $id ?>">
-                      <button type="submit" class="icon-btn delete">Delete permanently</button>
-                    </form>
-                  <?php else: ?>
-                    <!-- Important toggle -->
-                    <form method="POST" class="star-form">
-                      <input type="hidden" name="action" value="toggle_star">
-                      <input type="hidden" name="task_id" value="<?= $id ?>">
-                      <button type="submit" class="icon-btn star<?= $isImportant ? ' active' : '' ?>" aria-pressed="<?= $isImportant ? 'true' : 'false' ?>" aria-label="Mark &quot;<?= $name ?>&quot; as important"><?= $isImportant ? '&#9733;' : '&#9734;' ?></button>
-                    </form>
-
-                    <button type="button" class="icon-btn edit">Edit</button>
-
-                    <!-- Delete (moves the task to Trash) -->
-                    <form method="POST" class="delete-form">
-                      <input type="hidden" name="action" value="delete">
-                      <input type="hidden" name="task_id" value="<?= $id ?>">
-                      <button type="submit" class="icon-btn delete">Delete</button>
-                    </form>
-                  <?php endif; ?>
-                </div>
-              </div>
-
-              <?php if ($view !== 'trash'): ?>
-                <!-- Inline edit form (hidden until Edit is clicked) -->
-                <form method="POST" class="edit-form" hidden>
-                  <input type="hidden" name="action" value="update">
-                  <input type="hidden" name="task_id" value="<?= $id ?>">
-
-                  <label for="edit_name_<?= $id ?>">Task Name</label>
-                  <input type="text" id="edit_name_<?= $id ?>" name="task_name" value="<?= $name ?>" required>
-
-                  <label for="edit_description_<?= $id ?>">Task Description</label>
-                  <input type="text" id="edit_description_<?= $id ?>" name="task_description" value="<?= $description ?>" required>
-
-                  <label for="edit_due_<?= $id ?>">Due Date</label>
-                  <input type="date" id="edit_due_<?= $id ?>" name="task_due" value="<?= $due ?>">
-
-                  <label for="edit_status_<?= $id ?>">Status</label>
-                  <select id="edit_status_<?= $id ?>" name="task_status">
-                    <option value="todo"<?= $taskStatus === 'todo' ? ' selected' : '' ?>>To Do</option>
-                    <option value="inprogress"<?= $taskStatus === 'inprogress' ? ' selected' : '' ?>>In Progress</option>
-                    <option value="completed"<?= $taskStatus === 'completed' ? ' selected' : '' ?>>Completed</option>
-                  </select>
-
-                  <button type="submit" class="btn-save">Save</button>
-                  <button type="button" class="btn-cancel">Cancel</button>
-                </form>
-              <?php endif; ?>
-
-            </li>
-          <?php endforeach; ?>
-        </ul>
-      </section>
-    </main>
-
+<!--------- LEFT SIDEBAR --------------->
+<aside class="sidebar">
+  <div class="logo">
+    <img src="assets/logo.png" alt="" class="logo-img">
+    <div class="logo-text">
+      <span class="logo-title">TaskFlow</span>
+      <span class="logo-sub">Small steps. Big progress.</span>
+    </div>
   </div>
 
-  <script src="js/script.js"></script>
+  <nav aria-label="Task categories">
+    <ul class="nav-menu">
+      <li>
+        <a href="#" class="nav-item active" aria-current="page">
+          <img src="assets/tasks.png" alt="" class="nav-icon">
+          <span>My Tasks</span>
+          <span class="nav-count">3</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="nav-item">
+          <img src="assets/completed.png" alt="" class="nav-icon">
+          <span>Completed</span>
+          <span class="nav-count">1</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="nav-item">
+          <img src="assets/Brown Star Outline.png" alt="" class="nav-icon">
+          <span>Important</span>
+          <span class="nav-count">1</span>
+        </a>
+      </li>
+      <li>
+        <a href="#" class="nav-item">
+          <img src="assets/trash.png" alt="" class="nav-icon">
+          <span>Trash</span>
+          <span class="nav-count">0</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <footer class="user">
+    <img src="assets/taskflow_user_icon.png" alt="User avatar" class="user-avatar">
+    <span class="user-name">ZenaidaInk</span>
+    <img src="assets/taskflow_dropdown_icon.png" alt="" class="user-arrow">
+  </footer>
+</aside>
+
+<!--------- MAIN CONTENT --------------->
+<main class="main-content">
+
+  <header class="app-header">
+    <div class="header-title">
+      <h1>My Tasks</h1>
+      <p>What's on the agenda today?</p>
+    </div>
+    <div class="header-actions">
+      <div class="search-bar">
+        <img src="assets/Minimal Taupe Magnifying Glass Icon.png" alt="">
+        <input type="text" id="task-search" placeholder="Search tasks..." aria-label="Search tasks">
+      </div>
+      <button type="button" class="btn-primary" id="add-task-btn" aria-controls="add-task-section" aria-expanded="false">
+        <img src="assets/add.png" alt=""> Add Task
+      </button>
+    </div>
+  </header>
+
+  <nav class="filter-tabs" aria-label="Filter tasks by status">
+    <span class="filter-label"><img src="assets/filter.png" alt=""> Filter:</span>
+    <a href="#" class="filter-tab active" data-status="all">All</a>
+    <a href="#" class="filter-tab" data-status="todo">Pending</a>
+    <a href="#" class="filter-tab" data-status="inprogress">In Progress</a>
+    <a href="#" class="filter-tab" data-status="completed">Completed</a>
+  </nav>
+
+  <!--------- ADD TASK FORM --------------->
+  <section class="add-task-section" id="add-task-section" aria-labelledby="add-task-title" hidden>
+    <h2 id="add-task-title">Add new task</h2>
+    <form class="task-form">
+      <div class="field"><label for="task_name">Title</label><input type="text" id="task_name" placeholder="e.g. Finish Chapter 2" maxlength="100"></div>
+      <div class="field"><label for="task_description">Description</label><input type="text" id="task_description" placeholder="Add a short description" maxlength="255"></div>
+      <div class="form-row">
+        <div class="field"><label for="task_due">Due date</label><input type="date" id="task_due"></div>
+        <div class="field"><label for="task_status">Status</label>
+          <select id="task_status"><option>Pending</option><option>In Progress</option><option>Completed</option></select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-primary btn-secondary" id="cancel-task-btn">Cancel</button>
+        <button type="submit" class="btn-primary">Create task</button>
+      </div>
+    </form>
+  </section>
+
+  <!--------- TASK LIST --------------->
+  <section class="tasks" aria-label="Task list">
+    <p class="empty-state" id="no-results" hidden>No tasks match your search.</p>
+    <ul class="task-list" id="task-list">
+      <li class="task-item" data-status="inprogress">
+        <div class="task-row">
+          <input type="checkbox" class="task-checkbox" aria-label="Mark &quot;Finish Chapter 1&quot; as done">
+          <div class="task-details">
+            <h3>Finish Chapter 1</h3>
+            <p>Identify the Scope and Delimitations</p>
+          </div>
+          <span class="status-badge status-progress">In Progress</span>
+          <span class="task-date"><img src="assets/calendar.png" alt="">Nov 07, 2026</span>
+          <div class="task-actions">
+            <button type="button" class="btn-icon star is-active" aria-label="Mark as important" aria-pressed="true">★</button>
+            <button type="button" class="btn-icon edit" aria-label="Edit &quot;Finish Chapter 1&quot;" aria-expanded="false"><img src="assets/edit.png" alt=""></button>
+            <button type="button" class="btn-icon delete" aria-label="Move &quot;Finish Chapter 1&quot; to trash"><img src="assets/trash.png" alt=""></button>
+          </div>
+        </div>
+        <form class="task-form edit-form" hidden>
+          <div class="field"><label for="edit_name_1">Title</label><input type="text" id="edit_name_1" value="Finish Chapter 1"></div>
+          <div class="field"><label for="edit_desc_1">Description</label><input type="text" id="edit_desc_1" value="Identify the Scope and Delimitations"></div>
+          <div class="form-row">
+            <div class="field"><label for="edit_due_1">Due date</label><input type="date" id="edit_due_1"></div>
+            <div class="field"><label for="edit_status_1">Status</label>
+              <select id="edit_status_1">
+                <option>Pending</option>
+                <option selected>In Progress</option>
+                <option>Completed</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-primary btn-secondary">Cancel</button>
+            <button type="submit" class="btn-primary">Save changes</button>
+          </div>
+        </form>
+      </li>
+      <li class="task-item" data-status="todo">
+        <div class="task-row">
+          <input type="checkbox" class="task-checkbox" aria-label="Mark &quot;Buy groceries&quot; as done">
+          <div class="task-details">
+            <h3>Buy groceries</h3>
+            <p>Milk, eggs, bread, and butter</p>
+          </div>
+          <span class="status-badge status-pending">Pending</span>
+          <span class="task-date is-overdue"><img src="assets/calendar.png" alt="">Nov 03, 2026 (overdue)</span>
+          <div class="task-actions">
+            <button type="button" class="btn-icon star" aria-label="Mark as important" aria-pressed="false">☆</button>
+            <button type="button" class="btn-icon edit" aria-label="Edit &quot;Buy groceries&quot;" aria-expanded="false"><img src="assets/edit.png" alt=""></button>
+            <button type="button" class="btn-icon delete" aria-label="Move &quot;Buy groceries&quot; to trash"><img src="assets/trash.png" alt=""></button>
+          </div>
+        </div>
+        <form class="task-form edit-form" hidden>
+          <div class="field"><label for="edit_name_2">Title</label><input type="text" id="edit_name_2" value="Buy groceries"></div>
+          <div class="field"><label for="edit_desc_2">Description</label><input type="text" id="edit_desc_2" value="Milk, eggs, bread, and butter"></div>
+          <div class="form-row">
+            <div class="field"><label for="edit_due_2">Due date</label><input type="date" id="edit_due_2"></div>
+            <div class="field"><label for="edit_status_2">Status</label>
+              <select id="edit_status_2">
+                <option selected>Pending</option>
+                <option>In Progress</option>
+                <option>Completed</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-primary btn-secondary">Cancel</button>
+            <button type="submit" class="btn-primary">Save changes</button>
+          </div>
+        </form>
+      </li>
+      <li class="task-item is-complete" data-status="completed">
+        <div class="task-row">
+          <input type="checkbox" class="task-checkbox" aria-label="Mark &quot;Read a Book&quot; as done" checked>
+          <div class="task-details">
+            <h3 class="is-done">Read a Book</h3>
+            <p>Finish 2 chapters of Atomic Habits</p>
+          </div>
+          <span class="status-badge status-completed">Completed</span>
+          <span class="task-date"><img src="assets/calendar.png" alt="">No due date</span>
+          <div class="task-actions">
+            <button type="button" class="btn-icon star" aria-label="Mark as important" aria-pressed="false">☆</button>
+            <button type="button" class="btn-icon edit" aria-label="Edit &quot;Read a Book&quot;" aria-expanded="false"><img src="assets/edit.png" alt=""></button>
+            <button type="button" class="btn-icon delete" aria-label="Move &quot;Read a Book&quot; to trash"><img src="assets/trash.png" alt=""></button>
+          </div>
+        </div>
+        <form class="task-form edit-form" hidden>
+          <div class="field"><label for="edit_name_3">Title</label><input type="text" id="edit_name_3" value="Read a Book"></div>
+          <div class="field"><label for="edit_desc_3">Description</label><input type="text" id="edit_desc_3" value="Finish 2 chapters of Atomic Habits"></div>
+          <div class="form-row">
+            <div class="field"><label for="edit_due_3">Due date</label><input type="date" id="edit_due_3"></div>
+            <div class="field"><label for="edit_status_3">Status</label>
+              <select id="edit_status_3">
+                <option>Pending</option>
+                <option>In Progress</option>
+                <option selected>Completed</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-primary btn-secondary">Cancel</button>
+            <button type="submit" class="btn-primary">Save changes</button>
+          </div>
+        </form>
+      </li>
+    </ul>
+  </section>
+</main>
+
+<!--------- RIGHT SIDE BAR --------------->
+<aside class="right-sidebar" aria-label="Task overview">
+  <h2>Overview</h2>
+  <div class="progress-card">
+    <p class="progress-value">33%</p>
+    <p class="progress-caption">of your tasks are done</p>
+    <div class="progress-track" role="progressbar" aria-label="Completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="33">
+      <div class="progress-fill" style="width: 33%"></div>
+    </div>
+    <p class="progress-sub">1 of 3 tasks</p>
+  </div>
+  <ul class="stat-list">
+    <li><span class="dot dot-pending"></span><span>Pending</span><strong>1</strong></li>
+    <li><span class="dot dot-progress"></span><span>In progress</span><strong>1</strong></li>
+    <li><span class="dot dot-completed"></span><span>Completed</span><strong>1</strong></li>
+    <li><span class="dot dot-overdue"></span><span>Overdue</span><strong>1</strong></li>
+  </ul>
+</aside>
+
+<script src="script.js"></script>
 </body>
 </html>
