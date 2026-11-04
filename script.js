@@ -105,6 +105,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const taskItem = event.target.closest(".task-item");
     taskItem.classList.toggle("is-complete", event.target.checked);
     $("h3", taskItem).classList.toggle("is-done", event.target.checked);
+    event.target.form.submit();   // sends toggle_done to PHP
   }
   taskList.addEventListener("change", toggleDone);
 
@@ -157,10 +158,7 @@ document.addEventListener("DOMContentLoaded", function () {
     $$(".task-item").forEach(function (task) {
       task.hidden = status !== "all" && task.dataset.status !== status;
     });
-  }
-  $$(".filter-tab").forEach(function (tab) {
-    tab.addEventListener("click", filterByStatus);
-  });
+  };
 
   /* ---------- 7. Keyboard Shortcut ---------- */
 

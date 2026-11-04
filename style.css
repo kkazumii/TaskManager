@@ -524,6 +524,7 @@ select {
 .task-item[data-status="todo"]       { --accent: var(--status-pending-text); }
 .task-item[data-status="inprogress"] { --accent: var(--status-progress-text); }
 .task-item[data-status="completed"]  { --accent: var(--status-completed-text); }
+.task-item[data-status="overdue"] { --accent: var(--danger); }
 
 .task-item:hover {
   box-shadow: var(--shadow-md);
@@ -594,6 +595,10 @@ select {
   color: var(--status-completed-text);
 }
 
+.status-overdue {
+  background-color: #FDECEA;
+  color: var(--danger);
+}
 .task-date {
   font-size: 0.85rem;
   color: var(--text-muted);
