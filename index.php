@@ -341,7 +341,13 @@ $formAction = '?view=' . e($view) . '&amp;status=' . e($statusFilter);
 <body>
 
 <!--------- LEFT SIDEBAR --------------->
-<aside class="sidebar">
+<!--------- MOBILE MENU (hamburger) --------------->
+<button type="button" class="menu-toggle" id="menu-toggle" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
+  <span></span><span></span><span></span>
+</button>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<aside class="sidebar" id="sidebar">
   <div class="logo">
     <img src="assets/logo.png" alt="" class="logo-img">
     <div class="logo-text">
@@ -413,7 +419,8 @@ $formAction = '?view=' . e($view) . '&amp;status=' . e($statusFilter);
   </nav>
 
   <?php /* PAUL ADDED 12: validation errors are printed here in red (existing .form-error style). All output goes through e() */ ?>
-  <?php if (!empty($errors)): ?>
+  <?php /* When an Add / Edit modal is reopened because of an error, the errors are shown inside that modal instead */ ?>
+  <?php if (!empty($errors) && !$addOpen && $failedEditId === ''): ?>
     <div role="alert">
       <?php foreach ($errors as $error): ?>
         <p class="form-error"><?= e($error) ?></p>
@@ -435,8 +442,16 @@ $formAction = '?view=' . e($view) . '&amp;status=' . e($statusFilter);
   <!--------- ADD TASK FORM --------------->
   <?php /* PHP ADDED 9: CREATE. The form now POSTs to this same page; each input has a name PHP can read */ ?>
   <?php /* PAUL ADDED 14: the form stays open and keeps what was typed when validation fails */ ?>
-  <section class="add-task-section" id="add-task-section" aria-labelledby="add-task-title"<?= $addOpen ? '' : ' hidden' ?>>
+  <?php /* MODAL: the Add form is now a <dialog>. script.js opens it with showModal(); data-open reopens it after a failed validation */ ?>
+  <dialog class="add-task-section modal form-modal" id="add-task-section" aria-labelledby="add-task-title"<?= $addOpen ? ' data-open' : '' ?>>
     <h2 id="add-task-title">Add new task</h2>
+    <?php if ($addOpen): ?>
+      <div role="alert">
+        <?php foreach ($errors as $error): ?>
+          <p class="form-error"><?= e($error) ?></p>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
     <form class="task-form" method="POST">
       <input type="hidden" name="action" value="add">
       <div class="field"><label for="task_name">Title</label><input type="text" id="task_name" name="task_name" placeholder="e.g. Finish Chapter 2" maxlength="100" value="<?= e($addValues['name']) ?>"></div>
@@ -456,7 +471,7 @@ $formAction = '?view=' . e($view) . '&amp;status=' . e($statusFilter);
         <button type="submit" class="btn-primary">Create task</button>
       </div>
     </form>
-  </section>
+  </dialog>
 
   <!--------- TASK LIST --------------->
   <section class="tasks" aria-label="Task list">
@@ -548,7 +563,17 @@ $formAction = '?view=' . e($view) . '&amp;status=' . e($statusFilter);
  
         <?php /* PHP ADDED 14: UPDATE. The Edit form is prefilled with this task's values and sends the task's id */ ?>
         <?php if (!$inTrash): ?>
-        <form class="task-form edit-form" method="POST"<?= $editFailed ? '' : ' hidden' ?>>
+        <?php /* MODAL: the Edit form is now a <dialog> too. data-open reopens it after a failed validation */ ?>
+        <dialog class="modal form-modal edit-modal" aria-label="Edit task"<?= $editFailed ? ' data-open' : '' ?>>
+        <h2>Edit task</h2>
+        <?php if ($editFailed): ?>
+          <div role="alert">
+            <?php foreach ($errors as $error): ?>
+              <p class="form-error"><?= e($error) ?></p>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+        <form class="task-form edit-form" method="POST">
           <input type="hidden" name="action" value="update">
           <input type="hidden" name="task_id" value="<?= $id ?>">
           <div class="field"><label for="edit_name_<?= $id ?>">Title</label><input type="text" id="edit_name_<?= $id ?>" name="task_name" value="<?= e($ev['name']) ?>" maxlength="100"></div>
@@ -568,6 +593,7 @@ $formAction = '?view=' . e($view) . '&amp;status=' . e($statusFilter);
             <button type="submit" class="btn-primary">Save changes</button>
           </div>
         </form>
+        </dialog>
         <?php endif; ?>
       </li>
     <?php endforeach; ?>

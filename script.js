@@ -44,8 +44,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
   /* Helper: closes all inline Edit forms so only one form is open at a time */
   function closeAllEditForms() {
-    $$(".edit-form").forEach(function (form) {
-      form.hidden = true;
+    $$(".edit-modal").forEach(function (modal) {
+      modal.close();   // Edit forms are modals (<dialog>) now
     });
     $$(".btn-icon.edit").forEach(function (btn) {
       btn.setAttribute("aria-expanded", "false");
@@ -54,21 +54,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
   /* FUNCTION 2 — toggleAddForm()                   [click] */
   function toggleAddForm() {
-    const willOpen = addTaskSection.hidden;
+    const willOpen = !addTaskSection.open;
     if (willOpen) {
       closeAllEditForms(); // close any open Edit forms when opening Add Task
+      addTaskSection.showModal();   // Add form is a modal (<dialog>) now
+    } else {
+      addTaskSection.close();
     }
-    addTaskSection.hidden = !willOpen;
     addTaskBtn.setAttribute("aria-expanded", willOpen);
   }
   addTaskBtn.addEventListener("click", toggleAddForm);
 
   /* FUNCTION 3 — closeAddForm()                    [click] */
   function closeAddForm() {
-    addTaskSection.hidden = true;
+    addTaskSection.close();
     addTaskBtn.setAttribute("aria-expanded", "false");
   }
   $("#cancel-task-btn").addEventListener("click", closeAddForm);
+  addTaskSection.addEventListener("close", function () {
+    addTaskBtn.setAttribute("aria-expanded", "false");   // also runs when the modal is closed with Escape
+  });
 
   /* ---------- 3. Inline Edit Forms ---------- */
 
@@ -78,17 +83,28 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!editBtn) {
       return;
     }
-    const editForm = $(".edit-form", editBtn.closest(".task-item"));
-    const willOpen = editForm.hidden;
+    const editModal = $(".edit-modal", editBtn.closest(".task-item"));
+    const willOpen = !editModal.open;
 
     // Close the Add form and any other open Edit forms first
     closeAddForm();
     closeAllEditForms();
 
-    editForm.hidden = !willOpen;
+    if (willOpen) {
+      editModal.showModal();   // Edit form is a modal (<dialog>) now
+    }
     editBtn.setAttribute("aria-expanded", willOpen);
   }
   taskList.addEventListener("click", toggleEditForm);
+
+  /* FUNCTION 5 — closeEditModal()                  [click] */
+  function closeEditModal(event) {
+    if (!event.target.closest(".edit-modal .btn-secondary")) {
+      return;   // only the Cancel button inside an Edit modal
+    }
+    closeAllEditForms();
+  }
+  taskList.addEventListener("click", closeEditModal);
  
   /* ---------- 4. Star + Mark Done ---------- */
  
@@ -181,8 +197,8 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
     closeAddForm();
-    $$(".edit-form").forEach(function (form) {
-      form.hidden = true;
+    $$(".edit-modal").forEach(function (modal) {
+      modal.close();
     });
     $$(".btn-icon.edit").forEach(function (btn) {
       btn.setAttribute("aria-expanded", "false");
@@ -217,5 +233,49 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
   initCharCounters();
+
+  /* ---------- 9. Mobile Sidebar (Hamburger) ---------- */
+  const menuToggle = $("#menu-toggle");
+  const sidebarOverlay = $("#sidebar-overlay");
+
+  /* Helper: opens or closes the sidebar drawer (phones only, CSS hides the button on desktop) */
+  function setMenu(open) {
+    document.body.classList.toggle("menu-open", open);
+    menuToggle.setAttribute("aria-expanded", open);
+    menuToggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+  }
+
+  /* FUNCTION 14 — toggleMenu()                     [click] */
+  function toggleMenu() {
+    setMenu(!document.body.classList.contains("menu-open"));
+  }
+  menuToggle.addEventListener("click", toggleMenu);
+
+  /* FUNCTION 15 — closeMenu()                      [click] */
+  function closeMenu() {
+    setMenu(false);
+  }
+  sidebarOverlay.addEventListener("click", closeMenu);
+
+  /* FUNCTION 16 — closeMenuOnEscape()              [keydown] */
+  function closeMenuOnEscape(event) {
+    if (event.key === "Escape") {
+      closeMenu();
+    }
+  }
+  document.addEventListener("keydown", closeMenuOnEscape);
+
+  /* ---------- 10. Reopen Add / Edit Modal After a Validation Error ---------- */
+
+  /* FUNCTION 17 — openFailedForms()                [page load] */
+  function openFailedForms() {
+    $$("dialog[data-open]").forEach(function (modal) {
+      modal.showModal();   // PHP marks the form that failed with data-open
+    });
+    if (addTaskSection.open) {
+      addTaskBtn.setAttribute("aria-expanded", "true");
+    }
+  }
+  openFailedForms();
  
 });
