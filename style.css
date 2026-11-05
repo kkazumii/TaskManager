@@ -460,9 +460,27 @@ select {
 }
 
 .field label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-muted);
+}
+
+.char-count {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  opacity: 0.85;
+  transition: color 0.15s ease, font-weight 0.15s ease;
+}
+
+.char-count.is-max {
+  color: var(--danger);
+  font-weight: 600;
+  opacity: 1;
 }
 
 .task-form input[type="text"],
@@ -835,4 +853,89 @@ select {
 
 .modal .form-actions {
   margin-top: 20px;
+}
+
+/* PAUL ADDED: Trash page */
+.trash-toolbar { 
+  display: flex; justify-content: flex-end; 
+}
+.task-item.is-trashed .task-actions { 
+  gap: 8px; 
+}
+.task-item.is-trashed .task-checkbox { 
+  cursor: not-allowed; 
+}
+
+/* Overview: clickable stat rows */
+.stat-list li { padding: 0; }
+.stat-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+  color: inherit;
+  transition: background-color 0.2s ease;
+}
+
+.stat-link:hover { 
+  background: var(--bg-color); 
+}
+
+.stat-link.is-zero { 
+  color: var(--text-muted); 
+}
+
+.stat-link.is-zero .dot { 
+  opacity: 0.35; 
+}
+
+.stat-link.is-zero strong { 
+  font-weight: 500; 
+}
+
+.stat-link.is-alert strong { 
+  color: var(--danger); 
+}
+
+.progress-value.is-overdue { 
+  color: var(--danger); 
+}
+
+/* Overdue pill in the Overview card */
+.overdue-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;               /* only as wide as its text */
+  max-width: 100%;                  /* never wider than the card's inner area */
+  margin-top: -4px;
+  padding: 6px 16px;                /* same padding as .filter-tab */
+  border-radius: 999px;
+  background: var(--danger);
+  color: #FFFFFF;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(179, 69, 61, 0.30);
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.overdue-note::before {             /* static white dot */
+  content: "";
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #FFFFFF;
+}
+
+.overdue-note:hover {
+  background: var(--danger-hover);
+}
+
+.overdue-note:active {
+  transform: translateY(1px);
 }
