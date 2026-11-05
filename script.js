@@ -1,6 +1,6 @@
 /* =========================================================
    TaskFlow — script.js  
-
+ 
    EVENTS USED:
      1. input    -> live search filtering
      2. click    -> open/close Add Task form, toggle Edit forms,
@@ -8,22 +8,22 @@
      3. change   -> checkbox marks a task done/undone
      4. keydown  -> Escape closes open forms
    ========================================================= */
-
+ 
 /* short helpers for selecting elements */
 const $ = (selector, parent = document) => parent.querySelector(selector);
 const $$ = (selector, parent = document) => [...parent.querySelectorAll(selector)];
-
+ 
 document.addEventListener("DOMContentLoaded", function () {
-
+ 
   const taskList = $("#task-list");
-
+ 
   /* ---------- 1. Live Search Filtering ---------- */
-
+ 
   /* FUNCTION 1 — searchTasks()                     [input] */
   function searchTasks(event) {
     const filter = event.target.value.trim().toLowerCase();
     let visibleCount = 0;
-
+ 
     $$(".task-item").forEach(function (task) {
       const text = $(".task-details", task).textContent.toLowerCase();
       const isMatch = text.includes(filter);
@@ -32,19 +32,32 @@ document.addEventListener("DOMContentLoaded", function () {
         visibleCount++;
       }
     });
-
+ 
     // Show a message when no task matches the search
     $("#no-results").hidden = visibleCount > 0;
   }
   $("#task-search").addEventListener("input", searchTasks);
-
+ 
   /* ---------- 2. Add Task Form ---------- */
   const addTaskBtn = $("#add-task-btn");
   const addTaskSection = $("#add-task-section");
 
+  /* Helper: closes all inline Edit forms so only one form is open at a time */
+  function closeAllEditForms() {
+    $$(".edit-form").forEach(function (form) {
+      form.hidden = true;
+    });
+    $$(".btn-icon.edit").forEach(function (btn) {
+      btn.setAttribute("aria-expanded", "false");
+    });
+  }
+
   /* FUNCTION 2 — toggleAddForm()                   [click] */
   function toggleAddForm() {
     const willOpen = addTaskSection.hidden;
+    if (willOpen) {
+      closeAllEditForms(); // close any open Edit forms when opening Add Task
+    }
     addTaskSection.hidden = !willOpen;
     addTaskBtn.setAttribute("aria-expanded", willOpen);
   }
@@ -66,25 +79,19 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
     const editForm = $(".edit-form", editBtn.closest(".task-item"));
-    editForm.hidden = !editForm.hidden;
-    editBtn.setAttribute("aria-expanded", !editForm.hidden);
+    const willOpen = editForm.hidden;
+
+    // Close the Add form and any other open Edit forms first
+    closeAddForm();
+    closeAllEditForms();
+
+    editForm.hidden = !willOpen;
+    editBtn.setAttribute("aria-expanded", willOpen);
   }
   taskList.addEventListener("click", toggleEditForm);
-
-  /* FUNCTION 5 — closeEditForm()                   [click] */
-  function closeEditForm(event) {
-    const cancelBtn = event.target.closest(".edit-form .btn-secondary");
-    if (!cancelBtn) {
-      return;
-    }
-    const taskItem = cancelBtn.closest(".task-item");
-    $(".edit-form", taskItem).hidden = true;
-    $(".btn-icon.edit", taskItem).setAttribute("aria-expanded", "false");
-  }
-  taskList.addEventListener("click", closeEditForm);
-
+ 
   /* ---------- 4. Star + Mark Done ---------- */
-
+ 
   /* FUNCTION 6 — toggleStar()                      [click] */
   function toggleStar(event) {
     const starBtn = event.target.closest(".btn-icon.star");
@@ -96,7 +103,7 @@ document.addEventListener("DOMContentLoaded", function () {
     starBtn.setAttribute("aria-pressed", isActive);
   }
   taskList.addEventListener("click", toggleStar);
-
+ 
   /* FUNCTION 7 — toggleDone()                      [change] */
   function toggleDone(event) {
     if (!event.target.classList.contains("task-checkbox")) {
@@ -108,50 +115,56 @@ document.addEventListener("DOMContentLoaded", function () {
     event.target.form.submit();   // sends toggle_done to PHP
   }
   taskList.addEventListener("change", toggleDone);
-
-    /* ---------- 5. Delete Confirmation (modal) ---------- */
+ 
+  /* ---------- 5. Confirm Modal (Move to Trash / Delete permanently / Empty Trash) ---------- */
+  /* Any button with the class "js-confirm" opens this modal. The button carries the wording in
+     data-modal-title, data-modal-message and data-modal-confirm. When the user confirms,
+     the form that the button sits in is submitted to PHP. */
   const deleteModal = $("#delete-modal");
-  let taskToDelete = null;
-
-    /* FUNCTION 8 — openDeleteModal()                 [click] */
-    function openDeleteModal(event) {
-    const deleteBtn = event.target.closest(".btn-icon.delete");
-    if (!deleteBtn) {
+  let formToSubmit = null;
+ 
+  /* FUNCTION 8 — openDeleteModal()                 [click] */
+  function openDeleteModal(event) {
+    const trigger = event.target.closest(".js-confirm");
+    if (!trigger) {
       return;
     }
-    taskToDelete = deleteBtn.closest(".task-item");
-    $("#delete-modal-name").textContent = $("h3", taskToDelete).textContent;
+    formToSubmit = trigger.closest("form");
+    $("#delete-modal-title").textContent = trigger.dataset.modalTitle;
+    $("#delete-modal-message").textContent = trigger.dataset.modalMessage;
+    $("#delete-confirm-btn").textContent = trigger.dataset.modalConfirm;
     deleteModal.showModal();
   }
-  taskList.addEventListener("click", openDeleteModal);
-
+  document.addEventListener("click", openDeleteModal);   // document, because "Empty Trash" is outside the task list
+ 
   /* FUNCTION 9 — confirmDelete()                   [click] */
   function confirmDelete() {
-    if (taskToDelete) {
-      taskToDelete.remove();
-      taskToDelete = null;
-    }
+    const form = formToSubmit;
+    formToSubmit = null;
     deleteModal.close();
+    if (form) {
+      form.submit();   // sends delete / delete_forever / empty_trash to PHP
+    }
   }
   $("#delete-confirm-btn").addEventListener("click", confirmDelete);
-
+ 
   /* FUNCTION 10 — closeDeleteModal()               [click] */
   function closeDeleteModal(event) {
     if (event.target.id === "delete-cancel-btn" || event.target === deleteModal) {
-      taskToDelete = null;
+      formToSubmit = null;
       deleteModal.close();
     }
   }
   $("#delete-cancel-btn").addEventListener("click", closeDeleteModal);
   deleteModal.addEventListener("click", closeDeleteModal);
-
+ 
   /* ---------- 6. Status Filter Tabs ---------- */
-
+ 
   /* FUNCTION 11 — filterByStatus()                  [click] */
   function filterByStatus(event) {
     event.preventDefault();
     const status = this.dataset.status;
-
+ 
     $$(".filter-tab").forEach(function (tab) {
       tab.classList.toggle("active", tab === event.currentTarget);
     });
@@ -159,9 +172,9 @@ document.addEventListener("DOMContentLoaded", function () {
       task.hidden = status !== "all" && task.dataset.status !== status;
     });
   };
-
+ 
   /* ---------- 7. Keyboard Shortcut ---------- */
-
+ 
   /* FUNCTION 12 — closeFormsOnEscape()             [keydown] */
   function closeFormsOnEscape(event) {
     if (event.key !== "Escape") {
@@ -177,4 +190,32 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   document.addEventListener("keydown", closeFormsOnEscape);
 
+  /* ---------- 8. Live Character Counters (Title & Description) ---------- */
+
+  /* FUNCTION 13 — initCharCounters()               [input] */
+  function initCharCounters() {
+    $$(".task-form input[maxlength]").forEach(function (input) {
+      const max = parseInt(input.getAttribute("maxlength"), 10);
+      const field = input.closest(".field");
+      const label = field ? $("label", field) : null;
+      if (!label || !max) {
+        return;
+      }
+
+      const counter = document.createElement("span");
+      counter.className = "char-count";
+      label.appendChild(counter);
+
+      function updateCounter() {
+        const len = [...input.value].length; // matches PHP mb_strlen()
+        counter.textContent = len + " / " + max;
+        counter.classList.toggle("is-max", len >= max);
+      }
+
+      updateCounter();
+      input.addEventListener("input", updateCounter);
+    });
+  }
+  initCharCounters();
+ 
 });

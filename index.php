@@ -83,6 +83,43 @@ function findTaskIndex(array $tasks, string $id) {
     return null;
 }
 
+/* ---------- PAUL ADDED 1: validation helpers ---------- */
+// Counts characters, not bytes, so "ñ" or an emoji counts as 1 (strlen would count more).
+function textLength(string $text): int {
+    return function_exists('mb_strlen') ? mb_strlen($text, 'UTF-8') : strlen($text);
+}
+ 
+// The Day 2 rules. Takes the already-trimmed values and returns a list of error messages.
+// An empty list means the input is valid.
+// Each field shows at most ONE message: "required" is checked first, then the length.
+function validateTask(string $name, string $description): array {
+    $errors = [];
+ 
+    // Task name: required, 3 to 100 characters
+    if ($name === '') {                               // === '' on purpose: empty("0") is true in PHP
+        $errors[] = 'Task name is required.';
+    } elseif (textLength($name) < 3) {
+        $errors[] = 'Task name must be at least 3 characters long.';
+    } elseif (textLength($name) > 100) {
+        $errors[] = 'Task name cannot exceed 100 characters.';
+    }
+ 
+    // Task description: required, at most 255 characters
+    if ($description === '') {
+        $errors[] = 'Task description is required.';
+    } elseif (textLength($description) > 255) {
+        $errors[] = 'Task description cannot exceed 255 characters.';
+    }
+ 
+    return $errors;
+}
+ 
+// The date input always sends YYYY-MM-DD, but a POST can be edited by hand.
+// Anything that is not a real date is saved as "no due date".
+function cleanDate(string $value): string {
+    $date = DateTime::createFromFormat('Y-m-d', $value);
+    return ($date && $date->format('Y-m-d') === $value) ? $value : '';
+}
 
 /* ---------- PHP ADDED 3: read ?view= and ?status= from the URL ---------- */
 // Only accept values from our whitelist, never trust the URL.
@@ -92,19 +129,37 @@ if (!is_string($view) || !array_key_exists($view, VIEWS)) {
 }
 $pageTitle = VIEWS[$view];
 
-$statusFilter = $_GET['status'] ?? 'todo';
+// PAUL ADDED 2: Trash shows every status by default, so a completed task you deleted is not hidden there
+$statusFilter = $_GET['status'] ?? ($view === 'trash' ? 'all' : 'todo');
 if (!is_string($statusFilter) || ($statusFilter !== 'all' && !array_key_exists($statusFilter, STATUS_LABELS))) {
-    $statusFilter = 'todo';
+    $statusFilter = ($view === 'trash') ? 'all' : 'todo';
 }
 
 
 /* ---------- PHP ADDED 4: handle form submissions ---------- */
 $errors = [];   // PAUL: validation messages go in this array. They are printed in red further down.
 
+// PAUL ADDED 3: what the forms show again when validation fails (so nobody has to retype)
+$action       = '';
+$failedEditId = '';
+$addValues    = ['name' => '', 'description' => '', 'due' => '', 'status' => 'todo'];
+$editValues   = $addValues;
+
+// PAUL ADDED 4: request guarding. Everything below only runs for a POST request.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = postValue('action');                 // which form was submitted (hidden input)
     $id     = postValue('task_id');                // which task it applies to (hidden input)
     $saved  = false;                               // set to true when something changed, so we redirect
+
+     // PAUL ADDED 5: these actions work on ONE existing task, so the id must exist (Day 2 rule).
+    // Add / empty_trash do not need an id, so they skip this check.
+    $index = null;
+    if (in_array($action, ['update', 'toggle_star', 'toggle_done', 'delete', 'restore', 'delete_forever'], true)) {
+        $index = findTaskIndex($_SESSION['tasks'], $id);
+        if ($index === null) {
+            $errors[] = 'Task not found.';
+        }
+    }
 
     switch ($action) {
 
@@ -119,9 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status'      => array_key_exists($status, STORED_STATUSES) ? $status : 'todo',
             ];
 
-            // PAUL: validation goes here. Add messages to $errors, for example:
-            //   if ($input['name'] === '') { $errors[] = 'Task name is required.'; }
-            // The task below is only saved while $errors is still empty.
+            // PAUL ADDED 6: validation. Delete / toggle / star never come through here.
+            $errors = array_merge($errors, validateTask($input['name'], $input['description']));
 
             if (empty($errors)) {
                 if ($action === 'add') {
@@ -132,41 +186,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'created'   => date('Y-m-d'),
                     ];
                 } else {
-                    $index = findTaskIndex($_SESSION['tasks'], $id);
-                    if ($index !== null) {
-                        // overwrite only name/description/due/status, keep the other keys
-                        $_SESSION['tasks'][$index] = array_merge($_SESSION['tasks'][$index], $input);
-                    }
+                    // overwrite only name/description/due/status, keep the other keys
+                    $_SESSION['tasks'][$index] = array_merge($_SESSION['tasks'][$index], $input);
                 }
                 $saved = true;
+            } elseif ($action === 'add') {
+                $addValues = $input;               // refill the Add form
+            } else {
+                $failedEditId = $id;               // reopen and refill this task's Edit form
+                $editValues   = $input;
             }
             break;
 
         case 'toggle_star':                        // star on/off. Starred tasks show in Important
-            $index = findTaskIndex($_SESSION['tasks'], $id);
             if ($index !== null) {
                 $_SESSION['tasks'][$index]['important'] = !($_SESSION['tasks'][$index]['important'] ?? false);
+                $saved = true;
             }
-            $saved = true;
             break;
 
         case 'toggle_done':                        // checkbox: Pending <-> Completed
-            $index = findTaskIndex($_SESSION['tasks'], $id);
             if ($index !== null) {
                 $current = $_SESSION['tasks'][$index]['status'] ?? 'todo';
                 $_SESSION['tasks'][$index]['status'] = ($current === 'completed') ? 'todo' : 'completed';
+                $saved = true;
             }
-            $saved = true;
             break;
 
-        // PAUL: add the other actions here as more cases:
-        // 'delete', 'restore', 'delete_forever', 'empty_trash'
+        case 'delete':                             // PAUL ADDED 7: DELETE = move to Trash (the task is kept, just flagged)
+            if ($index !== null) {
+                $_SESSION['tasks'][$index]['deleted'] = true;
+                $saved = true;
+            }
+            break;
+ 
+        case 'restore':                            // PAUL ADDED 8: bring a task back from Trash
+            if ($index !== null) {
+                $_SESSION['tasks'][$index]['deleted'] = false;
+                $saved = true;
+            }
+            break;
+ 
+        case 'delete_forever':                     // PAUL ADDED 9: remove ONE task for good. Only allowed from Trash
+            if ($index !== null) {
+                if (!empty($_SESSION['tasks'][$index]['deleted'])) {
+                    unset($_SESSION['tasks'][$index]);
+                    $_SESSION['tasks'] = array_values($_SESSION['tasks']);   // re-number the list
+                    $saved = true;
+                } else {
+                    $errors[] = 'Only tasks in Trash can be deleted permanently.';
+                }
+            }
+            break;
+ 
+        case 'empty_trash':                        // PAUL ADDED 10: remove EVERY task that is in Trash for good
+            $_SESSION['tasks'] = array_values(array_filter(
+                $_SESSION['tasks'],
+                fn($task) => empty($task['deleted'])
+            ));
+            $saved = true;
+            break;
+    
     }
 
     // Redirect after a successful POST so that pressing Refresh does not re-send the form.
     if ($saved) {
-        $statusQuery = ($statusFilter !== 'all') ? '&status=' . $statusFilter : '';
-        header('Location: index.php?view=' . $view . $statusQuery);
+        // PAUL ADDED 19: always keep the current tab. Before, "All" was dropped and the page jumped back to Pending.
+        header('Location: index.php?view=' . $view . '&status=' . $statusFilter);
         exit;
     }
 }
@@ -215,6 +301,32 @@ foreach ($_SESSION['tasks'] as $t) {
         $counts['important']++;
     }
 }
+
+/* PAUL: Calculate live stats for the Right Sidebar Overview (non-deleted tasks only) */
+$stats = ['total' => 0, 'todo' => 0, 'overdue' => 0, 'completed' => 0];
+foreach ($_SESSION['tasks'] as $t) {
+    if (!empty($t['deleted'])) {
+        continue;
+    }
+    $stats['total']++;
+    $tStatus = $t['status'] ?? 'todo';
+    $tDue    = $t['due'] ?? '';
+
+    if ($tStatus === 'completed') {
+        $stats['completed']++;
+    } elseif ($tDue !== '' && $tDue < $today) {
+        $stats['overdue']++;
+    } else {
+        $stats['todo']++;
+    }
+}
+$openCount = $stats['todo'] + $stats['overdue'];
+
+/* PAUL ADDED 11: small values the page below needs */
+$inTrash    = ($view === 'trash');
+$addOpen    = ($action === 'add' && !empty($errors));   // reopen the Add form when adding failed
+// Where the small forms (star, delete, restore ...) send their POST. Already escaped, print it as is.
+$formAction = '?view=' . e($view) . '&amp;status=' . e($statusFilter);
 ?>
 
 <!--------- HTML STRUCTURE --------------->
@@ -300,7 +412,7 @@ foreach ($_SESSION['tasks'] as $t) {
     <a href="?view=<?= e($view) ?>&amp;status=all" class="filter-tab<?= $statusFilter === 'all' ? ' active' : '' ?>" data-status="all">All</a>
   </nav>
 
-  <?php /* PAUL: error messages from your validation are printed here (uses the existing .form-error style). Also re-open the Add form and refill its values when add fails. */ ?>
+  <?php /* PAUL ADDED 12: validation errors are printed here in red (existing .form-error style). All output goes through e() */ ?>
   <?php if (!empty($errors)): ?>
     <div role="alert">
       <?php foreach ($errors as $error): ?>
@@ -309,22 +421,32 @@ foreach ($_SESSION['tasks'] as $t) {
     </div>
   <?php endif; ?>
 
-  <?php /* PAUL: put the "Empty Trash" button here, only when $view === 'trash' */ ?>
+ <?php /* PAUL ADDED 13: "Empty Trash" button, only on the Trash page and only when there is something in it */ ?>
+  <?php if ($inTrash && $counts['trash'] > 0): ?>
+    <form method="POST" action="<?= $formAction ?>" class="trash-toolbar">
+      <input type="hidden" name="action" value="empty_trash">
+      <button type="button" class="btn-text btn-text--danger js-confirm"
+              data-modal-title="Empty Trash?"
+              data-modal-message="All <?= (int) $counts['trash'] ?> task(s) in Trash will be permanently deleted. This can't be undone."
+              data-modal-confirm="Empty Trash">Empty Trash</button>
+    </form>
+  <?php endif; ?>
 
   <!--------- ADD TASK FORM --------------->
   <?php /* PHP ADDED 9: CREATE. The form now POSTs to this same page; each input has a name PHP can read */ ?>
-  <section class="add-task-section" id="add-task-section" aria-labelledby="add-task-title" hidden>
+  <?php /* PAUL ADDED 14: the form stays open and keeps what was typed when validation fails */ ?>
+  <section class="add-task-section" id="add-task-section" aria-labelledby="add-task-title"<?= $addOpen ? '' : ' hidden' ?>>
     <h2 id="add-task-title">Add new task</h2>
     <form class="task-form" method="POST">
       <input type="hidden" name="action" value="add">
-      <div class="field"><label for="task_name">Title</label><input type="text" id="task_name" name="task_name" placeholder="e.g. Finish Chapter 2" maxlength="100"></div>
-      <div class="field"><label for="task_description">Description</label><input type="text" id="task_description" name="task_description" placeholder="Add a short description" maxlength="255"></div>
+      <div class="field"><label for="task_name">Title</label><input type="text" id="task_name" name="task_name" placeholder="e.g. Finish Chapter 2" maxlength="100" value="<?= e($addValues['name']) ?>"></div>
+      <div class="field"><label for="task_description">Description</label><input type="text" id="task_description" name="task_description" placeholder="Add a short description" maxlength="255" value="<?= e($addValues['description']) ?>"></div>
       <div class="form-row">
-        <div class="field"><label for="task_due">Due date</label><input type="date" id="task_due" name="task_due"></div>
+        <div class="field"><label for="task_due">Due date</label><input type="date" id="task_due" name="task_due" value="<?= e($addValues['due']) ?>"></div>
         <div class="field"><label for="task_status">Status</label>
           <select id="task_status" name="task_status">
             <?php foreach (STORED_STATUSES as $value => $label): ?>
-              <option value="<?= e($value) ?>"><?= e($label) ?></option>
+              <option value="<?= e($value) ?>"<?= $addValues['status'] === $value ? ' selected' : '' ?>><?= e($label) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -356,6 +478,15 @@ foreach ($_SESSION['tasks'] as $t) {
       $isDone      = ($status === 'completed');
       $isOverdue   = ($status === 'overdue');
       $isStarred   = !empty($task['important']);
+
+       // PAUL ADDED 15: if THIS task's Edit failed validation, show its form open with what was typed
+      $editFailed = ($failedEditId !== '' && $task['id'] === $failedEditId);
+      $ev = $editFailed ? $editValues : [
+          'name'        => $task['name'],
+          'description' => $task['description'],
+          'due'         => $task['due'],
+          'status'      => $task['status'],
+      ];
     ?>
       <li class="task-item<?= $isDone ? ' is-complete' : '' ?>" data-status="<?= e($status) ?>">
         <div class="task-row">
@@ -377,31 +508,57 @@ foreach ($_SESSION['tasks'] as $t) {
 
           <?php /* PAUL: in the Trash view, show Restore / Delete permanently buttons here instead of these icons */ ?>
           <div class="task-actions">
+          <?php if ($inTrash): ?>
+            <?php /* PAUL ADDED 16: Trash page shows Restore and Delete permanently instead of the icons */ ?>
+            <form method="POST" action="<?= $formAction ?>">
+              <input type="hidden" name="action" value="restore">
+              <input type="hidden" name="task_id" value="<?= $id ?>">
+              <button type="submit" class="btn-text">Restore</button>
+            </form>
+ 
+            <form method="POST" action="<?= $formAction ?>">
+              <input type="hidden" name="action" value="delete_forever">
+              <input type="hidden" name="task_id" value="<?= $id ?>">
+              <button type="button" class="btn-text btn-text--danger js-confirm"
+                      data-modal-title="Delete permanently?"
+                      data-modal-message="&quot;<?= $name ?>&quot; will be permanently deleted. This can't be undone."
+                      data-modal-confirm="Delete permanently">Delete permanently</button>
+            </form>
+          <?php else: ?>
             <?php /* PHP ADDED 13: the star is a submit button inside a tiny form. Starred tasks show in Important */ ?>
               <form method="POST" action="?view=<?= e($view) ?>&amp;status=<?= e($statusFilter) ?>">              <input type="hidden" name="action" value="toggle_star">
               <input type="hidden" name="task_id" value="<?= $id ?>">
               <button type="submit" class="btn-icon star<?= $isStarred ? ' is-active' : '' ?>" aria-label="Mark as important" aria-pressed="<?= $isStarred ? 'true' : 'false' ?>"><?= $isStarred ? '★' : '☆' ?></button>
             </form>
-
-            <button type="button" class="btn-icon edit" aria-label="Edit &quot;<?= $name ?>&quot;" aria-expanded="false"><img src="assets/edit.png" alt=""></button>
-
-            <?php /* PAUL: Delete does nothing for now. script.js only reacts to buttons with the class "delete", which this one doesn't have on purpose. When you build Delete: add the class back (class="btn-icon delete"), wrap it in <form method="POST" class="delete-form"> with hidden action=delete and task_id, and update confirmDelete() in script.js to submit that form. */ ?>
-            <button type="button" class="btn-icon" aria-label="Move &quot;<?= $name ?>&quot; to trash"><img src="assets/trash.png" alt=""></button>
+ 
+            <button type="button" class="btn-icon edit" aria-label="Edit &quot;<?= $name ?>&quot;" aria-expanded="<?= $editFailed ? 'true' : 'false' ?>"><img src="assets/edit.png" alt=""></button>
+ 
+            <?php /* PAUL ADDED 17: DELETE. Opens the confirm modal (script.js), then submits this form and the task moves to Trash */ ?>
+            <form method="POST" action="<?= $formAction ?>" class="delete-form">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="task_id" value="<?= $id ?>">
+              <button type="button" class="btn-icon js-confirm" aria-label="Move &quot;<?= $name ?>&quot; to trash"
+                      data-modal-title="Move to Trash?"
+                      data-modal-message="&quot;<?= $name ?>&quot; will be moved to Trash. You can restore it later."
+                      data-modal-confirm="Move to Trash"><img src="assets/trash.png" alt=""></button>
+            </form>
+          <?php endif; ?>
           </div>
         </div>
-
+ 
         <?php /* PHP ADDED 14: UPDATE. The Edit form is prefilled with this task's values and sends the task's id */ ?>
-        <form class="task-form edit-form" method="POST" hidden>
+        <?php if (!$inTrash): ?>
+        <form class="task-form edit-form" method="POST"<?= $editFailed ? '' : ' hidden' ?>>
           <input type="hidden" name="action" value="update">
           <input type="hidden" name="task_id" value="<?= $id ?>">
-          <div class="field"><label for="edit_name_<?= $id ?>">Title</label><input type="text" id="edit_name_<?= $id ?>" name="task_name" value="<?= $name ?>" maxlength="100"></div>
-          <div class="field"><label for="edit_desc_<?= $id ?>">Description</label><input type="text" id="edit_desc_<?= $id ?>" name="task_description" value="<?= $description ?>" maxlength="255"></div>
+          <div class="field"><label for="edit_name_<?= $id ?>">Title</label><input type="text" id="edit_name_<?= $id ?>" name="task_name" value="<?= e($ev['name']) ?>" maxlength="100"></div>
+          <div class="field"><label for="edit_desc_<?= $id ?>">Description</label><input type="text" id="edit_desc_<?= $id ?>" name="task_description" value="<?= e($ev['description']) ?>" maxlength="255"></div>
           <div class="form-row">
-            <div class="field"><label for="edit_due_<?= $id ?>">Due date</label><input type="date" id="edit_due_<?= $id ?>" name="task_due" value="<?= e($task['due']) ?>"></div>
+            <div class="field"><label for="edit_due_<?= $id ?>">Due date</label><input type="date" id="edit_due_<?= $id ?>" name="task_due" value="<?= e($ev['due']) ?>"></div>
             <div class="field"><label for="edit_status_<?= $id ?>">Status</label>
               <select id="edit_status_<?= $id ?>" name="task_status">
                 <?php foreach (STORED_STATUSES as $value => $label): ?>
-                  <option value="<?= e($value) ?>"<?= $task['status'] === $value ? ' selected' : '' ?>><?= e($label) ?></option>
+                  <option value="<?= e($value) ?>"<?= $ev['status'] === $value ? ' selected' : '' ?>><?= e($label) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -411,40 +568,45 @@ foreach ($_SESSION['tasks'] as $t) {
             <button type="submit" class="btn-primary">Save changes</button>
           </div>
         </form>
+        <?php endif; ?>
       </li>
     <?php endforeach; ?>
     </ul>
   </section>
 </main>
-
+ 
 <!--------- RIGHT SIDE BAR --------------->
 <aside class="right-sidebar" aria-label="Task overview">
   <h2>Overview</h2>
   <div class="progress-card">
-    <p class="progress-value">33%</p>
-    <p class="progress-caption">of your tasks are done</p>
-    <div class="progress-track" role="progressbar" aria-label="Completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="33">
-      <div class="progress-fill" style="width: 33%"></div>
-    </div>
-    <p class="progress-sub">1 of 3 tasks</p>
+    <?php if ($openCount > 0): ?>
+      <p class="progress-value"><?= $openCount ?></p>
+      <p class="progress-caption"><?= $openCount === 1 ? 'task left to do' : 'tasks left to do' ?></p>
+      <?php if ($stats['overdue'] > 0): ?>
+        <a class="overdue-note" href="?view=mytasks&amp;status=overdue"><?= $stats['overdue'] ?> overdue, start here</a>
+      <?php endif; ?>
+    <?php else: ?>
+      <p class="progress-value">All clear</p>
+      <p class="progress-caption">Nothing left to do.</p>
+    <?php endif; ?>
   </div>
   <ul class="stat-list">
-    <li><span class="dot dot-pending"></span><span>Pending</span><strong>1</strong></li>
-    <li><span class="dot dot-overdue"></span><span>Overdue</span><strong>1</strong></li>
-    <li><span class="dot dot-completed"></span><span>Completed</span><strong>1</strong></li>
+    <li><a class="stat-link<?= $stats['todo'] === 0 ? ' is-zero' : '' ?>" href="?view=mytasks&amp;status=todo"><span class="dot dot-pending"></span><span>Pending</span><strong><?= $stats['todo'] ?></strong></a></li>
+    <li><a class="stat-link<?= $stats['overdue'] === 0 ? ' is-zero' : ' is-alert' ?>" href="?view=mytasks&amp;status=overdue"><span class="dot dot-overdue"></span><span>Overdue</span><strong><?= $stats['overdue'] ?></strong></a></li>
+    <li><a class="stat-link<?= $stats['completed'] === 0 ? ' is-zero' : '' ?>" href="?view=mytasks&amp;status=completed"><span class="dot dot-completed"></span><span>Completed</span><strong><?= $stats['completed'] ?></strong></a></li>
   </ul>
 </aside>
-
-<!-- Delete modal (script.js) -->
+ 
+<!-- Confirm modal (script.js). PAUL ADDED 18: the title, message and button text are filled in by script.js, so the same modal serves Move to Trash, Delete permanently and Empty Trash -->
 <dialog class="modal" id="delete-modal" aria-labelledby="delete-modal-title">
   <h2 id="delete-modal-title">Move to Trash?</h2>
-  <p>"<span id="delete-modal-name">this task</span>" will be moved to Trash. You can restore it later.</p>
+  <p id="delete-modal-message">This task will be moved to Trash. You can restore it later.</p>
   <div class="form-actions">
     <button type="button" class="btn-primary btn-secondary" id="delete-cancel-btn">Cancel</button>
     <button type="button" class="btn-primary btn-danger" id="delete-confirm-btn">Move to Trash</button>
   </div>
 </dialog>
-
+ 
 <script src="script.js"></script>
 </body>
 </html>
